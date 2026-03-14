@@ -121,10 +121,15 @@ function createBreakWindow(
 ): BrowserWindow {
   const notificationWidth =
     settings.postponeBreakEnabled || settings.skipBreakEnabled ? 550 : 450;
+  // On Linux, use workArea (excludes top panel/taskbar) so the window appears at
+  // the top of the visible area; some WMs ignore initial position, so we also
+  // call setPosition after show.
+  const area =
+    process.platform === "linux" ? display.workArea : display.bounds;
   const x = Math.round(
-    display.bounds.x + display.bounds.width / 2 - notificationWidth / 2,
+    area.x + area.width / 2 - notificationWidth / 2,
   );
-  const y = display.bounds.y + 50;
+  const y = area.y + (process.platform === "linux" ? 10 : 0);
 
   const win = new BrowserWindow({
     width: notificationWidth,
@@ -160,6 +165,11 @@ function createBreakWindow(
   }
 
   win.showInactive();
+
+  // On Linux, re-apply position after show; some window managers ignore initial bounds
+  if (process.platform === "linux") {
+    win.setPosition(x, y);
+  }
 
   win.on("closed", () => {
     breakWindows = breakWindows.filter((w) => w !== win);

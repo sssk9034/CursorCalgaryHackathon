@@ -41,6 +41,7 @@
     "auto-launch": "^5.0.6",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.0.0",
+    "framer-motion": "^12.36.0",
     "moment": "^2.30.1"
   }
 }

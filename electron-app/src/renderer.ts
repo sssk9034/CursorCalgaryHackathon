@@ -27,6 +27,7 @@
  */
 
 import "./index.css";
+import { animate } from "framer-motion/dom";
 import type { BreakInitPayload, BreakBeginPayload, Settings } from "./types";
 import {
   defaultSettings,
@@ -364,11 +365,28 @@ function renderSettingsPage(s: Settings) {
     msg.className = "settings-saved";
     msg.textContent = "Settings saved.";
     form.appendChild(msg);
+    animate(msg, { opacity: [0, 1], y: [-4, 0] }, {
+      duration: 0.25,
+      ease: "easeOut",
+    });
     setTimeout(() => msg.remove(), 2000);
   });
 
   wrap.appendChild(form);
   document.body.appendChild(wrap);
+
+  animate(wrap, { opacity: [0, 1], y: [8, 0] }, {
+    duration: 0.4,
+    ease: "easeOut",
+  });
+  const sections = form.querySelectorAll(".settings-section");
+  sections.forEach((el, i) => {
+    animate(el as HTMLElement, { opacity: [0, 1], y: [12, 0] }, {
+      duration: 0.35,
+      delay: 0.05 + i * 0.04,
+      ease: "easeOut",
+    });
+  });
 }
 
 // ── Type augmentation for contextBridge API ───────────────────────────────────
@@ -446,7 +464,7 @@ if (page === 'break') {
     document.body.innerHTML = '';
 
     const card = document.createElement('div');
-    card.className = 'break-card break-card-enter';
+    card.className = 'break-card';
     card.style.backgroundColor = backgroundColor;
     card.style.color = textColor;
 
@@ -502,6 +520,11 @@ if (page === 'break') {
     content.appendChild(btnGroup);
     card.appendChild(content);
     document.body.appendChild(card);
+
+    animate(card, { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] }, {
+      duration: 0.3,
+      ease: "easeOut",
+    });
 
     // ── Two-phase timer ─────────────────────────────────────────────────────
 
@@ -593,7 +616,7 @@ if (page === 'break') {
 
     // Card
     const card = document.createElement('div');
-    card.className = 'break-progress-card break-progress-enter';
+    card.className = 'break-progress-card';
     card.style.backgroundColor = backgroundColor;
     card.style.color = textColor;
 
@@ -668,6 +691,16 @@ if (page === 'break') {
     document.body.innerHTML = '';
     document.body.appendChild(backdrop);
     document.body.appendChild(card);
+
+    animate(backdrop, { opacity: [0, 1] }, {
+      duration: 0.3,
+      ease: "easeOut",
+    });
+
+    animate(card, { opacity: [0, 1], y: [-20, 0] }, {
+      duration: 0.5,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    });
 
     const totalMs = breakLengthSeconds * 1000;
 
