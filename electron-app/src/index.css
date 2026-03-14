@@ -6,3 +6,19 @@ body {
   max-width: 38rem;
   padding: 2rem;
 }
+
+/* Countdown overlay styles */
+.countdown-body {
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+.countdown-bar {
+  width: 100%;
+  height: 36px;
+  background: linear-gradient(90deg, #e74c3c, #f39c12);
+  transition: width 0.1s linear;
+}

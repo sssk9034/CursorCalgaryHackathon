@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, screen } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -8,6 +8,51 @@ if (started) {
 }
 
 let tray: Tray | null = null;
+let countdownWindow: BrowserWindow | null = null;
+
+const createCountdownWindow = () => {
+  // Close existing countdown window if open
+  if (countdownWindow && !countdownWindow.isDestroyed()) {
+    countdownWindow.close();
+  }
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width } = primaryDisplay.workAreaSize;
+
+  countdownWindow = new BrowserWindow({
+    width,
+    height: 36,
+    x: 0,
+    y: 0,
+    frame: false,
+    alwaysOnTop: true,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    focusable: false,
+    transparent: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  });
+
+  const url = MAIN_WINDOW_VITE_DEV_SERVER_URL
+    ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}#countdown`
+    : undefined;
+
+  if (url) {
+    countdownWindow.loadURL(url);
+  } else {
+    countdownWindow.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      { hash: 'countdown' },
+    );
+  }
+
+  countdownWindow.on('closed', () => {
+    countdownWindow = null;
+  });
+};
 
 // Minimal 16x16 PNG for tray icon (light grey square)
 const TRAY_ICON_DATA =
@@ -43,7 +88,7 @@ const createWindow = () => {
     tray = new Tray(icon);
     tray.setToolTip('My App');
     const contextMenu = Menu.buildFromTemplate([
-      { label: 'Trigger', click: () => {} },
+      { label: 'Trigger', click: () => createCountdownWindow() },
       {
         label: 'Show',
         click: () => {
