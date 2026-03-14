@@ -33,9 +33,30 @@ if (window.location.hash === '#countdown') {
   document.body.innerHTML = '';
   document.body.className = 'countdown-body';
 
+  const container = document.createElement('div');
+  container.className = 'countdown-container';
+
   const bar = document.createElement('div');
   bar.className = 'countdown-bar';
-  document.body.appendChild(bar);
+  container.appendChild(bar);
+
+  const buttons = document.createElement('div');
+  buttons.className = 'countdown-buttons';
+
+  const snoozeBtn = document.createElement('button');
+  snoozeBtn.textContent = 'Snooze';
+  snoozeBtn.className = 'countdown-btn countdown-btn-snooze';
+  snoozeBtn.addEventListener('click', () => window.close());
+
+  const dismissBtn = document.createElement('button');
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.className = 'countdown-btn countdown-btn-dismiss';
+  dismissBtn.addEventListener('click', () => window.close());
+
+  buttons.appendChild(snoozeBtn);
+  buttons.appendChild(dismissBtn);
+  container.appendChild(buttons);
+  document.body.appendChild(container);
 
   const startTime = Date.now();
 
