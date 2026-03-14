@@ -30,7 +30,7 @@ const createCountdownWindow = () => {
     frame: false,
     alwaysOnTop: true,
     resizable: false,
-    movable: false,
+    movable: true,
     skipTaskbar: true,
     transparent: true,
     webPreferences: {
