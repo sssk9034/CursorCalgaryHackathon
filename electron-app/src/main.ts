@@ -1,8 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
-import { initDb } from './db';
-import { startEventServer } from './event-server';
+import { initDb } from './lib/db';
+import { startEventServer } from './lib/event-server';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
