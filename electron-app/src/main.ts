@@ -19,17 +19,19 @@ const createCountdownWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width } = primaryDisplay.workAreaSize;
 
+  const winWidth = Math.round(width / 4);
+  const winX = Math.round((width - winWidth) / 2);
+
   countdownWindow = new BrowserWindow({
-    width,
-    height: 36,
-    x: 0,
+    width: winWidth,
+    height: 70,
+    x: winX,
     y: 0,
     frame: false,
     alwaysOnTop: true,
     resizable: false,
     movable: false,
     skipTaskbar: true,
-    focusable: false,
     transparent: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
