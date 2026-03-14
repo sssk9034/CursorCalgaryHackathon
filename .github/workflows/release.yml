@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: electron-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      # --targets restricts to MakerZIP only. forge.config.ts has no platform
+      # guards on other makers; --targets makes CI intent explicit.
+      - run: npm run make -- --targets @electron-forge/maker-zip
+
+      # Path is relative to GITHUB_WORKSPACE (repo root), NOT working-directory.
+      # electron-app/ prefix is required — upload-artifact ignores defaults.run.working-directory.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: electron-app/out/make/zip/darwin/**/*.zip
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: electron-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      # --targets restricts to MakerSquirrel only (MakerDeb/MakerRpm would fail on Windows).
+      - run: npm run make -- --targets @electron-forge/maker-squirrel
+
+      # *Setup*.exe targets only the installer: Forge names it "{productName} Setup {version}.exe".
+      # Excludes .nupkg, RELEASES, and stub executables that Squirrel places alongside.
+      # Path is relative to GITHUB_WORKSPACE — electron-app/ prefix required.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: electron-app/out/make/squirrel.windows/**/*Setup*.exe
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-macos, build-windows]
+    steps:
+      # download-artifact@v4 without a name downloads ALL artifacts.
+      # path: artifacts/ places each artifact in a subdirectory named after
+      # its artifact name (e.g. artifacts/macos-artifacts/, artifacts/windows-artifacts/).
+      # The files: glob below traverses these subdirectories automatically.
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
