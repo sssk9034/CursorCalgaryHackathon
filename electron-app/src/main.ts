@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -6,6 +6,12 @@ import started from 'electron-squirrel-startup';
 if (started) {
   app.quit();
 }
+
+let tray: Tray | null = null;
+
+// Minimal 16x16 PNG for tray icon (light grey square)
+const TRAY_ICON_DATA =
+  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHklEQVQ4T2NkYGD4z0ABYBw1gGE0EhiGAQwMDAwAARgAAT4GAdyAAAAASUVORK5CYII=';
 
 const createWindow = () => {
   // Create the browser window.
@@ -28,6 +34,34 @@ const createWindow = () => {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+
+  // Create tray icon with context menu (only once)
+  if (!tray) {
+    const icon = nativeImage.createFromDataURL(
+      `data:image/png;base64,${TRAY_ICON_DATA}`,
+    );
+    tray = new Tray(icon);
+    tray.setToolTip('My App');
+    const contextMenu = Menu.buildFromTemplate([
+      { label: 'Trigger', click: () => {} },
+      {
+        label: 'Show',
+        click: () => {
+          // Show the main window if it exists, otherwise create a new one
+          const windows = BrowserWindow.getAllWindows();
+          if (windows.length > 0) {
+            const win = windows[0];
+            win.show();
+            win.focus();
+          } else {
+            createWindow();
+          }
+        },
+      },
+      { label: 'Quit', click: () => app.quit() },
+    ]);
+    tray.setContextMenu(contextMenu);
+  }
 };
 
 // This method will be called when Electron has finished
@@ -35,13 +69,10 @@ const createWindow = () => {
 // Some APIs can only be used after this event occurs.
 app.on('ready', createWindow);
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Keep app running when all windows are closed (tray-only mode).
+// User can quit via the tray menu "Quit" option.
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // Do not quit - app stays running with tray icon
 });
 
 app.on('activate', () => {
