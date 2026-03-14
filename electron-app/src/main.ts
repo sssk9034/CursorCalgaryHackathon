@@ -8,17 +8,17 @@ import {
   ipcMain,
   Notification,
   powerMonitor,
-} from 'electron';
-import path from 'node:path';
-import started from 'electron-squirrel-startup';
+} from "electron";
+import path from "node:path";
+import started from "electron-squirrel-startup";
 import {
-  defaultSettings,
   NotificationType,
   IpcChannel,
   Settings,
   BreakInitPayload,
   BreakBeginPayload,
-} from './types';
+} from "./types";
+import { getSettings, setSettings, getDisableEndTime, setDisableEndTime } from "./store";
 
 if (started) {
   app.quit();
@@ -26,19 +26,19 @@ if (started) {
 
 // ── State ────────────────────────────────────────────────────────────────────
 
-const settings: Settings = { ...defaultSettings };
 let tray: Tray | null = null;
 let breakWindows: BrowserWindow[] = [];
-let breakTime: number = Date.now() + settings.breakFrequencySeconds * 1000;
+let settingsWindow: BrowserWindow | null = null;
+let breakTime = 0;
 let lastCompletedBreakTime: number = Date.now();
 let postponeCount = 0;
 let breakActive = false;
 let breakStartTime = 0;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
+  return html.replace(/<[^>]*>/g, "");
 }
 
 function formatTimeSinceLastBreak(): string {
@@ -66,6 +66,7 @@ function sendToBreakWindows(channel: string, ...args: unknown[]) {
 }
 
 function scheduleNextBreak(delaySec?: number) {
+  const settings = getSettings();
   const delay = delaySec ?? settings.breakFrequencySeconds;
   breakTime = Date.now() + delay * 1000;
   breakActive = false;
@@ -74,6 +75,7 @@ function scheduleNextBreak(delaySec?: number) {
 }
 
 function completeBreakTracking() {
+  const settings = getSettings();
   const elapsed = Date.now() - breakStartTime;
   const halfRequired = settings.breakLengthSeconds * 500;
   if (elapsed >= halfRequired) {
@@ -82,10 +84,31 @@ function completeBreakTracking() {
 }
 
 function updateTrayTooltip() {
-  if (tray) {
-    const remainMs = Math.max(0, breakTime - Date.now());
-    const remainMin = Math.ceil(remainMs / 60000);
-    tray.setToolTip(`BreakTimer — next break in ${remainMin}m`);
+  if (!tray) return;
+  const settings = getSettings();
+  if (!settings.breaksEnabled) {
+    const disableEnd = getDisableEndTime();
+    if (disableEnd) {
+      const remain = Math.max(0, disableEnd - Date.now());
+      const min = Math.ceil(remain / 60000);
+      tray.setToolTip(`BreakTimer — disabled for ${min}m`);
+    } else {
+      tray.setToolTip("BreakTimer — breaks disabled");
+    }
+    return;
+  }
+  const remainMs = Math.max(0, breakTime - Date.now());
+  const remainMin = Math.ceil(remainMs / 60000);
+  tray.setToolTip(`BreakTimer — next break in ${remainMin}m`);
+}
+
+function checkDisableTimeout() {
+  const disableEnd = getDisableEndTime();
+  if (disableEnd && Date.now() >= disableEnd) {
+    setDisableEndTime(null);
+    const settings = getSettings();
+    setSettings({ ...settings, breaksEnabled: true });
+    buildTray();
   }
 }
 
@@ -94,8 +117,10 @@ function updateTrayTooltip() {
 function createBreakWindow(
   display: Electron.Display,
   windowId: number,
+  settings: Settings,
 ): BrowserWindow {
-  const notificationWidth = settings.postponeBreakEnabled || settings.skipBreakEnabled ? 550 : 450;
+  const notificationWidth =
+    settings.postponeBreakEnabled || settings.skipBreakEnabled ? 550 : 450;
   const x = Math.round(
     display.bounds.x + display.bounds.width / 2 - notificationWidth / 2,
   );
@@ -111,16 +136,17 @@ function createBreakWindow(
     focusable: false,
     resizable: false,
     skipTaskbar: true,
+    movable: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
     },
   });
 
-  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   const params = new URLSearchParams({
-    page: 'break',
+    page: "break",
     windowId: String(windowId),
   });
 
@@ -135,7 +161,7 @@ function createBreakWindow(
 
   win.showInactive();
 
-  win.on('closed', () => {
+  win.on("closed", () => {
     breakWindows = breakWindows.filter((w) => w !== win);
   });
 
@@ -144,15 +170,15 @@ function createBreakWindow(
 
 function doCreateBreakWindows() {
   closeBreakWindows();
+  const settings = getSettings();
   const displays = screen.getAllDisplays();
   displays.forEach((display, i) => {
-    const win = createBreakWindow(display, i);
+    const win = createBreakWindow(display, i, settings);
     breakWindows.push(win);
   });
 
-  // Send init payload once each window has loaded
   breakWindows.forEach((win, i) => {
-    win.webContents.once('did-finish-load', () => {
+    win.webContents.once("did-finish-load", () => {
       const payload: BreakInitPayload = {
         settings,
         timeSinceLastBreak: formatTimeSinceLastBreak(),
@@ -164,26 +190,104 @@ function doCreateBreakWindows() {
   });
 }
 
+// ── Settings Window ───────────────────────────────────────────────────────────
+
+function createSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+
+  settingsWindow = new BrowserWindow({
+    title: "BreakTimer — Settings",
+    width: 580,
+    minWidth: 580,
+    height: 650,
+    minHeight: 600,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+
+  const params = new URLSearchParams({ page: "settings" });
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    settingsWindow.loadURL(
+      `${MAIN_WINDOW_VITE_DEV_SERVER_URL}?${params.toString()}`,
+    );
+  } else {
+    settingsWindow.loadFile(
+      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+      { query: Object.fromEntries(params) },
+    );
+  }
+
+  settingsWindow.on("ready-to-show", () => {
+    settingsWindow?.show();
+    settingsWindow?.focus();
+  });
+
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
+
 // ── OS Notification ───────────────────────────────────────────────────────────
 
 function showOsNotification() {
+  const settings = getSettings();
   const notification = new Notification({
-    title: 'Time for a break!',
+    title: settings.breakTitle || "Time for a break!",
     body: stripHtml(settings.breakMessage),
-    silent: process.platform !== 'win32',
+    silent: process.platform !== "win32",
   });
   notification.show();
-  if (process.platform !== 'darwin') {
+  if (process.platform !== "darwin") {
     setTimeout(() => notification.close(), 5000);
   }
   lastCompletedBreakTime = Date.now();
   scheduleNextBreak();
 }
 
+// ── Working Hours ──────────────────────────────────────────────────────────────
+
+function checkInWorkingHours(): boolean {
+  const settings = getSettings();
+  if (!settings.workingHoursEnabled) return true;
+
+  const now = new Date();
+  const day = now.getDay();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+
+  const dayKeys: (keyof Settings)[] = [
+    "workingHoursSunday",
+    "workingHoursMonday",
+    "workingHoursTuesday",
+    "workingHoursWednesday",
+    "workingHoursThursday",
+    "workingHoursFriday",
+    "workingHoursSaturday",
+  ];
+  const daySettings = settings[dayKeys[day]] as { enabled: boolean; ranges: { fromMinutes: number; toMinutes: number }[] };
+  if (!daySettings?.enabled) return false;
+
+  return daySettings.ranges.some(
+    (r) => minutes >= r.fromMinutes && minutes <= r.toMinutes,
+  );
+}
+
 // ── Scheduling Engine ─────────────────────────────────────────────────────────
 
 function doBreak() {
   if (breakActive) return;
+  const settings = getSettings();
+
+  if (!settings.breaksEnabled) return;
+  if (getDisableEndTime()) return;
+  if (!checkInWorkingHours()) return;
+
   breakActive = true;
 
   if (settings.notificationType === NotificationType.Notification) {
@@ -194,25 +298,45 @@ function doBreak() {
 }
 
 function tick() {
-  // Idle detection — treat idle as a natural break and reset the timer
+  const settings = getSettings();
+
+  if (getDisableEndTime()) {
+    checkDisableTimeout();
+    return;
+  }
+
+  if (!settings.breaksEnabled) return;
+  if (!checkInWorkingHours()) return;
+
   const idleTime = powerMonitor.getSystemIdleTime();
-  if (idleTime >= settings.idleResetLengthSeconds && !breakActive) {
+  if (
+    settings.idleResetEnabled &&
+    idleTime >= settings.idleResetLengthSeconds &&
+    !breakActive
+  ) {
     lastCompletedBreakTime = Date.now();
     scheduleNextBreak();
     return;
   }
 
-  if (!breakActive && Date.now() >= breakTime) {
+  if (!breakActive && breakTime > 0 && Date.now() >= breakTime) {
     doBreak();
   }
 }
 
 // ── IPC Handlers ──────────────────────────────────────────────────────────────
 
+ipcMain.handle(IpcChannel.SettingsGet, () => getSettings());
+
+ipcMain.handle(IpcChannel.SettingsSet, (_event, newSettings: Settings) => {
+  setSettings(newSettings);
+  buildTray();
+});
+
 ipcMain.handle(IpcChannel.BreakStart, (_event, windowId: number) => {
-  // Only window 0 drives the state change; all windows follow
   if (windowId !== 0) return;
 
+  const settings = getSettings();
   breakStartTime = Date.now();
   const breakEndTime = breakStartTime + settings.breakLengthSeconds * 1000;
 
@@ -220,7 +344,8 @@ ipcMain.handle(IpcChannel.BreakStart, (_event, windowId: number) => {
   breakWindows.forEach((win, i) => {
     if (win.isDestroyed()) return;
     const display = displays[i] ?? displays[0];
-    if (settings.backdropOpacity > 0) {
+    const showBackdrop = settings.showBackdrop && settings.backdropOpacity > 0;
+    if (showBackdrop) {
       win.setFocusable(true);
       win.setBounds({
         x: display.bounds.x,
@@ -239,10 +364,16 @@ ipcMain.handle(IpcChannel.BreakStart, (_event, windowId: number) => {
     }
   });
 
+  const allowPostpone =
+    settings.postponeBreakEnabled &&
+    (settings.postponeLimit === 0 || postponeCount < settings.postponeLimit);
+
   const payload: BreakBeginPayload = {
     breakEndTime,
     breakStartTime,
     settings,
+    postponeCount,
+    allowPostpone,
   };
   sendToBreakWindows(IpcChannel.BreakBegin, payload);
 });
@@ -260,6 +391,7 @@ ipcMain.handle(IpcChannel.BreakSkip, () => {
 });
 
 ipcMain.handle(IpcChannel.BreakPostpone, () => {
+  const settings = getSettings();
   postponeCount++;
   closeBreakWindows();
   scheduleNextBreak(settings.postponeSeconds);
@@ -267,49 +399,153 @@ ipcMain.handle(IpcChannel.BreakPostpone, () => {
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
 
-// Minimal 16×16 teal PNG tray icon
 const TRAY_ICON_DATA =
-  'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHklEQVQ4T2NkYGD4z0ABYBw1gGE0EhiGAQwMDAwAARgAAT4GAdyAAAAASUVORK5CYII=';
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHklEQVQ4T2NkYGD4z0ABYBw1gGE0EhiGAQwMDAwAARgAAT4GAdyAAAAASUVORK5CYII=";
+
+function buildTray() {
+  if (!tray) return;
+
+  const settings = getSettings();
+  const disableEnd = getDisableEndTime();
+  const inWorkingHours = checkInWorkingHours();
+  const idleTime = powerMonitor.getSystemIdleTime();
+  const idle =
+    settings.idleResetEnabled &&
+    idleTime >= settings.idleResetLengthSeconds;
+
+  const getDisableTimeRemaining = (): string => {
+    if (!disableEnd) return "";
+    const remain = Math.max(0, disableEnd - Date.now());
+    const min = Math.floor(remain / 60000);
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (min < 1) return "<1m";
+    if (h > 0) return `${h}h ${m}m`;
+    return `${min}m`;
+  };
+
+  const setBreaksEnabled = (enabled: boolean) => {
+    const s = getSettings();
+    setSettings({ ...s, breaksEnabled: enabled });
+    if (enabled) setDisableEndTime(null);
+    else if (breakActive) closeBreakWindows();
+    buildTray();
+  };
+
+  const disableFor = (ms: number) => {
+    setBreaksEnabled(false);
+    setDisableEndTime(Date.now() + ms);
+    buildTray();
+  };
+
+  const nextBreakLabel =
+    breakTime > 0 && settings.breaksEnabled && inWorkingHours && !breakActive
+      ? `Next break in ${Math.max(1, Math.ceil((breakTime - Date.now()) / 60000))}m`
+      : "";
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: nextBreakLabel,
+      visible: !!nextBreakLabel,
+      enabled: false,
+    },
+    {
+      label: `Disabled for ${getDisableTimeRemaining()}`,
+      visible: !!disableEnd && !settings.breaksEnabled,
+      enabled: false,
+    },
+    {
+      label: "Outside of working hours",
+      visible: !inWorkingHours && settings.breaksEnabled,
+      enabled: false,
+    },
+    {
+      label: "Idle",
+      visible: idle && settings.breaksEnabled,
+      enabled: false,
+    },
+    { type: "separator" },
+    {
+      label: "Enable",
+      click: () => setBreaksEnabled(true),
+      visible: !settings.breaksEnabled,
+    },
+    {
+      label: "Disable...",
+      visible: settings.breaksEnabled,
+      submenu: [
+        { label: "Indefinitely", click: () => setBreaksEnabled(false) },
+        { label: "30 minutes", click: () => disableFor(30 * 60 * 1000) },
+        { label: "1 hour", click: () => disableFor(60 * 60 * 1000) },
+        { label: "2 hours", click: () => disableFor(2 * 60 * 60 * 1000) },
+        { label: "4 hours", click: () => disableFor(4 * 60 * 60 * 1000) },
+        {
+          label: "Rest of day",
+          click: () => {
+            const now = new Date();
+            const end = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              now.getDate(),
+              23,
+              59,
+              59,
+            );
+            disableFor(end.getTime() - now.getTime());
+          },
+        },
+      ],
+    },
+    {
+      label: "Take a Break Now",
+      visible: settings.breaksEnabled && inWorkingHours && !breakActive,
+      click: () => doBreak(),
+    },
+    {
+      label: "Reset Timer",
+      click: () => scheduleNextBreak(),
+    },
+    { type: "separator" },
+    { label: "Settings...", click: createSettingsWindow },
+    { label: "Quit", click: () => app.quit() },
+  ];
+
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+  updateTrayTooltip();
+}
 
 function initTray() {
   const icon = nativeImage.createFromDataURL(
     `data:image/png;base64,${TRAY_ICON_DATA}`,
   );
   tray = new Tray(icon);
-  updateTrayTooltip();
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: 'Take a Break Now',
-      click: () => {
-        if (!breakActive) doBreak();
-      },
-    },
-    {
-      label: 'Reset Timer',
-      click: () => scheduleNextBreak(),
-    },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]);
-  tray.setContextMenu(contextMenu);
+  if (process.platform === "win32") {
+    tray.on("click", () => tray?.popUpContextMenu());
+  }
+
+  buildTray();
 }
 
-// ── App lifecycle ─────────────────────────────────────────────────────────────
+// ── App lifecycle ──────────────────────────────────────────────────────────────
 
-app.on('ready', () => {
+app.on("ready", () => {
+  const settings = getSettings();
+  breakTime = Date.now() + settings.breakFrequencySeconds * 1000;
+
   initTray();
-  // Start scheduling engine
   setInterval(tick, 1000);
-  // Update tooltip every minute
-  setInterval(updateTrayTooltip, 60_000);
+  setInterval(() => {
+    checkDisableTimeout();
+    updateTrayTooltip();
+    buildTray();
+  }, 5000);
 });
 
-// Keep app alive in tray when all windows are closed
-app.on('window-all-closed', () => {
-  // intentionally empty — app lives in tray
+app.on("window-all-closed", () => {
+  /* App lives in tray */
 });
 
-app.on('activate', () => {
-  // macOS: nothing to do, no main settings window
+app.on("activate", () => {
+  createSettingsWindow();
 });

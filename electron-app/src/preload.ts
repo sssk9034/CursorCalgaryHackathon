@@ -1,7 +1,12 @@
-import { contextBridge, ipcRenderer } from 'electron';
-import { IpcChannel, BreakInitPayload, BreakBeginPayload } from './types';
+import { contextBridge, ipcRenderer } from "electron";
+import {
+  IpcChannel,
+  BreakInitPayload,
+  BreakBeginPayload,
+  Settings,
+} from "./types";
 
-contextBridge.exposeInMainWorld('breakApp', {
+contextBridge.exposeInMainWorld("breakApp", {
   /** Main → renderer: initial settings + context for the break window */
   onBreakInit: (cb: (payload: BreakInitPayload) => void) => {
     ipcRenderer.on(IpcChannel.BreakInit, (_event, payload: BreakInitPayload) =>
@@ -35,4 +40,10 @@ contextBridge.exposeInMainWorld('breakApp', {
 
   /** Renderer → main: user clicked "Snooze" */
   invokeBreakPostpone: () => ipcRenderer.invoke(IpcChannel.BreakPostpone),
+
+  /** Settings */
+  invokeGetSettings: () =>
+    ipcRenderer.invoke(IpcChannel.SettingsGet) as Promise<Settings>,
+  invokeSetSettings: (settings: Settings) =>
+    ipcRenderer.invoke(IpcChannel.SettingsSet, settings),
 });
