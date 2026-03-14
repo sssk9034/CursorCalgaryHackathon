@@ -1,9 +1,16 @@
 import http from 'node:http';
 import { insertTabEvent } from './db';
+import { ThrashDetector } from './thrash-detector';
 
 const PORT = 3456;
 
 export function startEventServer() {
+  const detector = new ThrashDetector();
+
+  detector.on('thrash', (alert) => {
+    // TODO: send notification to renderer, trigger UI alert, etc.
+    console.log('Thrash alert emitted:', alert);
+  });
   const server = http.createServer((req, res) => {
     // CORS headers for browser extension
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,6 +30,7 @@ export function startEventServer() {
         try {
           const event = JSON.parse(body);
           insertTabEvent(event);
+          detector.push(event);
           console.log('Event ingested:', event);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ ok: true }));
