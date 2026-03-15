@@ -101,6 +101,7 @@ export const defaultSettings: Settings = {
 };
 
 export enum IpcChannel {
+  AuthLogin = "auth:login",
   BreakInit = "break:init",
   BreakStart = "break:start",
   BreakBegin = "break:begin",

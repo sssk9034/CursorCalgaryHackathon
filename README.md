@@ -30,11 +30,15 @@ electron-app/            # Electron desktop app
 cp .env.example .env
 ```
 
-2. Add your OpenRouter API key to `.env`:
+2. Add your OpenRouter and WorkOS values to `.env`:
 
 ```
 OPENROUTER_API_KEY=sk-or-your-key-here
+WORKOS_CLIENT_ID=client_...
+WORKOS_REDIRECT_URI=yourapp://callback
 ```
+
+Use the redirect URI configured in your WorkOS app settings.
 
 3. Install dependencies in both projects:
 

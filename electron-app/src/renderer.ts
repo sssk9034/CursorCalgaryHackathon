@@ -350,6 +350,23 @@ function renderSettingsPage(s: Settings) {
   // System
   const sysSec = section("System");
   addToggle(sysSec, "Launch at startup", () => s.autoLaunch, (v) => (s.autoLaunch = v));
+  const loginBtn = document.createElement("button");
+  loginBtn.type = "button";
+  loginBtn.textContent = "Login with Google";
+  loginBtn.addEventListener("click", async () => {
+    const originalText = loginBtn.textContent;
+    loginBtn.disabled = true;
+    loginBtn.textContent = "Opening login...";
+    try {
+      await window.breakApp.invokeLogin();
+    } catch (error) {
+      alert(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = originalText;
+    }
+  });
+  addRow(sysSec, "Account", loginBtn);
   form.appendChild(sysSec);
 
   const saveBtn = document.createElement("button");
@@ -394,6 +411,7 @@ function renderSettingsPage(s: Settings) {
 declare global {
   interface Window {
     breakApp: {
+      invokeLogin: () => Promise<void>;
       onBreakInit: (cb: (payload: BreakInitPayload) => void) => void;
       onBreakBegin: (cb: (payload: BreakBeginPayload) => void) => void;
       onBreakClose: (cb: () => void) => void;

@@ -7,6 +7,9 @@ import {
 } from "./types";
 
 contextBridge.exposeInMainWorld("breakApp", {
+  /** Renderer → main: open Google login via WorkOS */
+  invokeLogin: () => ipcRenderer.invoke(IpcChannel.AuthLogin),
+
   /** Main → renderer: initial settings + context for the break window */
   onBreakInit: (cb: (payload: BreakInitPayload) => void) => {
     ipcRenderer.on(IpcChannel.BreakInit, (_event, payload: BreakInitPayload) =>
