@@ -19,6 +19,8 @@ import {
   BreakBeginPayload,
 } from "./types";
 import { getSettings, setSettings, getDisableEndTime, setDisableEndTime } from "./store";
+import { initDb } from "./lib/db";
+import { startEventServer } from "./lib/event-server";
 
 if (started) {
   app.quit();
@@ -629,6 +631,9 @@ function initTray() {
 // ── App lifecycle ──────────────────────────────────────────────────────────────
 
 app.on("ready", () => {
+  initDb();
+  startEventServer();
+
   const settings = getSettings();
   breakTime = Date.now() + settings.breakFrequencySeconds * 1000;
 
