@@ -5,7 +5,7 @@ const GROUP_TITLE = 'Distractions';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="container">
-    <h1>Tab Focus</h1>
+    <h1>Deep Focus</h1>
     <p class="subtitle">Hide distracting tabs so you can focus</p>
     <div class="button-row">
       <button id="focus-btn" type="button">Hide Distracting Tabs</button>

@@ -1,6 +1,6 @@
-# Tab Focus
+# Deep Focus
 
-A browser extension + Electron app that detects tab thrashing and helps you focus by closing distracting tabs using AI.
+A browser extension + Electron app that detects tab thrashing and helps you focus by hiding distracting tabs using AI.
 
 ## Architecture
 
