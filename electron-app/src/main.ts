@@ -2,13 +2,14 @@ import dotenv from "dotenv";
 import {
   app,
   BrowserWindow,
-  Tray,
+  ipcMain,
   Menu,
   nativeImage,
-  screen,
-  ipcMain,
   Notification,
   powerMonitor,
+  screen,
+  shell,
+  Tray,
 } from "electron";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -26,6 +27,7 @@ import {
 import { getSettings, setSettings, getDisableEndTime, setDisableEndTime } from "./store";
 import { initDb } from "./lib/db";
 import { startEventServer } from "./lib/event-server";
+import { getSourceSnapshot } from "./lib/linear";
 
 if (started) {
   app.quit();
@@ -33,6 +35,7 @@ if (started) {
 
 // ── State ────────────────────────────────────────────────────────────────────
 
+let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let breakWindows: BrowserWindow[] = [];
 let settingsWindow: BrowserWindow | null = null;
@@ -119,6 +122,94 @@ function checkDisableTimeout() {
   }
 }
 
+function loadRendererWindow(
+  win: BrowserWindow,
+  query?: Record<string, string>,
+) {
+  const queryString = query
+    ? new URLSearchParams(query).toString()
+    : "";
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    const url = queryString
+      ? `${MAIN_WINDOW_VITE_DEV_SERVER_URL}?${queryString}`
+      : MAIN_WINDOW_VITE_DEV_SERVER_URL;
+    void win.loadURL(url);
+    return;
+  }
+
+  const filePath = path.join(
+    __dirname,
+    `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`,
+  );
+
+  if (query) {
+    void win.loadFile(filePath, { query });
+    return;
+  }
+
+  void win.loadFile(filePath);
+}
+
+function createMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
+  mainWindow = new BrowserWindow({
+    width: 1460,
+    height: 920,
+    minWidth: 1180,
+    minHeight: 760,
+    show: false,
+    backgroundColor: "#f7f7f8",
+    title: "Harbour",
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : undefined,
+    trafficLightPosition:
+      process.platform === "darwin" ? { x: 14, y: 16 } : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+
+  loadRendererWindow(mainWindow);
+
+  mainWindow.on("ready-to-show", () => {
+    mainWindow?.show();
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
+
+  return mainWindow;
+}
+
+ipcMain.handle("harbour:open-issue", async (_event, issueUrl: string) => {
+  if (
+    typeof issueUrl !== "string" ||
+    !issueUrl.startsWith("https://linear.app/")
+  ) {
+    throw new Error("Invalid Linear issue URL.");
+  }
+
+  const desktopUrl = issueUrl.replace(/^https:\/\//, "linear://");
+  await shell.openExternal(desktopUrl);
+});
+
+ipcMain.handle("harbour:get-sources", async () => {
+  return getSourceSnapshot();
+});
+
 // ── Break Windows ─────────────────────────────────────────────────────────────
 
 function createBreakWindow(
@@ -162,14 +253,7 @@ function createBreakWindow(
     windowId: String(windowId),
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    win.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}?${params.toString()}`);
-  } else {
-    win.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-      { query: Object.fromEntries(params) },
-    );
-  }
+  loadRendererWindow(win, Object.fromEntries(params));
 
   win.showInactive();
 
@@ -230,16 +314,7 @@ function createSettingsWindow() {
 
   const params = new URLSearchParams({ page: "settings" });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    settingsWindow.loadURL(
-      `${MAIN_WINDOW_VITE_DEV_SERVER_URL}?${params.toString()}`,
-    );
-  } else {
-    settingsWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-      { query: Object.fromEntries(params) },
-    );
-  }
+  loadRendererWindow(settingsWindow, Object.fromEntries(params));
 
   settingsWindow.on("ready-to-show", () => {
     settingsWindow?.show();
@@ -704,6 +779,7 @@ app.on("ready", () => {
   breakTime = Date.now() + settings.breakFrequencySeconds * 1000;
 
   initTray();
+  createMainWindow();
   setInterval(tick, 1000);
   setInterval(() => {
     checkDisableTimeout();
@@ -717,5 +793,5 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
-  createSettingsWindow();
+  createMainWindow();
 });

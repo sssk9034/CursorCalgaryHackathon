@@ -5,6 +5,7 @@ import {
   BreakBeginPayload,
   Settings,
 } from "./types";
+import type { SourceSnapshot } from "./types/harbour";
 
 contextBridge.exposeInMainWorld("breakApp", {
   /** Main → renderer: initial settings + context for the break window */
@@ -46,4 +47,11 @@ contextBridge.exposeInMainWorld("breakApp", {
     ipcRenderer.invoke(IpcChannel.SettingsGet) as Promise<Settings>,
   invokeSetSettings: (settings: Settings) =>
     ipcRenderer.invoke(IpcChannel.SettingsSet, settings),
+});
+
+contextBridge.exposeInMainWorld("harbourDesktop", {
+  getSources: (): Promise<SourceSnapshot> =>
+    ipcRenderer.invoke("harbour:get-sources"),
+  openIssue: (url: string): Promise<void> =>
+    ipcRenderer.invoke("harbour:open-issue", url),
 });
