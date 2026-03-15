@@ -1,0 +1,148 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  width: 360px;
+  padding: 16px;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 1.4em;
+  margin: 0;
+}
+
+.subtitle {
+  color: #888;
+  font-size: 0.85em;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 10px 16px;
+  font-size: 0.95em;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: #646cff;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #535bf2;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+.restore-btn {
+  background-color: #444;
+  display: none;
+}
+
+.restore-btn:hover {
+  background-color: #555;
+}
+
+.hide-btn {
+  background-color: #e54545;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.hide-btn:hover {
+  background-color: #cc3333;
+}
+
+.status {
+  font-size: 0.85em;
+  color: #aaa;
+  min-height: 1.2em;
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  background: #1a1a1a;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.suggestion-item:hover {
+  background: #2a2a2a;
+}
+
+.suggestion-item input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.tab-title {
+  font-weight: 500;
+  display: block;
+}
+
+.tab-reason {
+  color: #888;
+  font-size: 0.85em;
+  display: block;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  .suggestion-item {
+    background: #f0f0f0;
+  }
+  .suggestion-item:hover {
+    background: #e0e0e0;
+  }
+}
