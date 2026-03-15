@@ -11,6 +11,7 @@ import {
   powerMonitor,
 } from "electron";
 import path from "node:path";
+import { execFile } from "node:child_process";
 
 // Load .env from repo root (two levels up from electron-app/)
 dotenv.config({ path: path.resolve(app.getAppPath(), "..", ".env") });
@@ -265,6 +266,62 @@ function showOsNotification() {
   }
   lastCompletedBreakTime = Date.now();
   scheduleNextBreak();
+}
+
+// ── Thrash Sound ─────────────────────────────────────────────────────────────
+
+function getThrashSoundPath(): string {
+  const settings = getSettings();
+  const soundName = settings.soundType.toLowerCase() || "gong";
+  // In dev: app.getAppPath() → electron-app/
+  const baseDir = app.isPackaged
+    ? path.join(process.resourcesPath, "sounds")
+    : path.join(app.getAppPath(), "public", "sounds");
+  return path.join(baseDir, `${soundName}_start.wav`);
+}
+
+function playThrashSound(): void {
+  const settings = getSettings();
+  if (settings.soundType === "NONE") return;
+
+  const soundPath = getThrashSoundPath();
+  console.log("Playing thrash sound from:", soundPath);
+  if (process.platform === "darwin") {
+    execFile("afplay", [soundPath], (err) => {
+      if (err) console.error("Failed to play thrash sound:", err);
+    });
+  } else if (process.platform === "win32") {
+    execFile("powershell", ["-c", `(New-Object Media.SoundPlayer '${soundPath}').PlaySync()`], (err) => {
+      if (err) console.error("Failed to play thrash sound:", err);
+    });
+  } else {
+    // Linux: try aplay (ALSA), fall back to paplay (PulseAudio)
+    execFile("aplay", [soundPath], (err) => {
+      if (err) {
+        execFile("paplay", [soundPath], (err2) => {
+          if (err2) console.error("Failed to play thrash sound:", err2);
+        });
+      }
+    });
+  }
+}
+
+/** Like doBreak() but skips the working-hours check — thrash should always alert */
+function doThrashBreak() {
+  if (breakActive) return;
+  const settings = getSettings();
+
+  if (!settings.breaksEnabled) return;
+  if (getDisableEndTime()) return;
+  // Intentionally skip checkInWorkingHours()
+
+  breakActive = true;
+
+  if (settings.notificationType === NotificationType.Notification) {
+    showOsNotification();
+  } else {
+    doCreateBreakWindows();
+  }
 }
 
 // ── Working Hours ──────────────────────────────────────────────────────────────
@@ -636,7 +693,12 @@ function initTray() {
 
 app.on("ready", () => {
   initDb();
-  startEventServer({ onThrash: () => doBreak() });
+  startEventServer({
+    onThrash: () => {
+      playThrashSound();
+      doThrashBreak();
+    },
+  });
 
   const settings = getSettings();
   breakTime = Date.now() + settings.breakFrequencySeconds * 1000;
