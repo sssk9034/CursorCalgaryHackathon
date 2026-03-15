@@ -1,16 +1,80 @@
-html {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f2f4f7;
+  --surface: #fbfcfd;
+  --panel: #f7f9fc;
+  --border: #d5dde8;
+  --text: #111827;
+  --muted: #5f6b7a;
+  --accent: #0f766e;
+  --accent-soft: #d7f3ef;
+  --caution: #b45309;
+  --danger: #b42318;
+  --success: #166534;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
   height: 100%;
   margin: 0;
-  padding: 0;
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Pro Text', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.harbour-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cfd4dc transparent;
+}
+
+.harbour-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.harbour-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.harbour-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #cfd4dc;
+  background-clip: padding-box;
 }
 
 /* ── Break Notification (pre-break banner) ─────────────────────────────────── */
@@ -332,4 +396,3 @@ body {
   font-size: 13px;
   color: #16a085;
 }
-
