@@ -41,7 +41,7 @@ Respond with ONLY valid JSON in this exact format, no markdown:
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
+      model: 'google/gemini-3.1-flash-lite-preview',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
     }),

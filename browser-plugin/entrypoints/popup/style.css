@@ -55,13 +55,13 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.close-btn {
+.hide-btn {
   background-color: #e54545;
   margin-top: 8px;
   width: 100%;
 }
 
-.close-btn:hover {
+.hide-btn:hover {
   background-color: #cc3333;
 }
 

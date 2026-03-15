@@ -5,8 +5,8 @@ const FOCUS_URL = 'http://127.0.0.1:3456/focus';
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="container">
     <h1>Tab Focus</h1>
-    <p class="subtitle">Clean up distracting tabs with AI</p>
-    <button id="focus-btn" type="button">Activate Focus Mode</button>
+    <p class="subtitle">Hide distracting tabs so you can focus</p>
+    <button id="focus-btn" type="button">Hide Distracting Tabs</button>
     <div id="status" class="status"></div>
     <div id="results" class="results"></div>
   </div>
@@ -36,51 +36,64 @@ focusBtn.addEventListener('click', async () => {
       body: JSON.stringify({ tabs }),
     });
 
+    const text = await res.text();
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || `Server error ${res.status}`);
+      let errorMsg = `Server error ${res.status}`;
+      try {
+        const err = JSON.parse(text);
+        errorMsg = err.error || errorMsg;
+      } catch { /* not JSON */ }
+      throw new Error(errorMsg);
     }
 
-    const suggestion = await res.json();
+    const suggestion = JSON.parse(text);
 
-    if (suggestion.tabsToClose.length === 0) {
-      statusEl.textContent = 'You look focused! No tabs to close.';
+    if (!suggestion.tabsToClose || suggestion.tabsToClose.length === 0) {
+      statusEl.textContent = 'You look focused! No distracting tabs found.';
       focusBtn.disabled = false;
-      focusBtn.textContent = 'Activate Focus Mode';
+      focusBtn.textContent = 'Hide Distracting Tabs';
       return;
     }
 
     statusEl.textContent = suggestion.summary;
 
-    // Show each tab suggestion with a checkbox
     resultsEl.innerHTML = `
       <div class="suggestion-list">
         ${suggestion.tabsToClose.map((t: { id: number; title: string; reason: string }, i: number) => `
           <label class="suggestion-item">
             <input type="checkbox" checked data-tab-id="${t.id}" data-index="${i}" />
-            <span class="tab-title">${escapeHtml(t.title)}</span>
-            <span class="tab-reason">${escapeHtml(t.reason)}</span>
+            <span class="tab-info">
+              <span class="tab-title">${escapeHtml(t.title)}</span>
+              <span class="tab-reason">${escapeHtml(t.reason)}</span>
+            </span>
           </label>
         `).join('')}
       </div>
-      <button id="close-btn" type="button" class="close-btn">Close Selected Tabs</button>
+      <button id="hide-btn" type="button" class="hide-btn">Hide Selected Tabs</button>
     `;
 
-    document.querySelector<HTMLButtonElement>('#close-btn')!.addEventListener('click', async () => {
+    document.querySelector<HTMLButtonElement>('#hide-btn')!.addEventListener('click', async () => {
       const checkboxes = resultsEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
       const tabIds = Array.from(checkboxes).map((cb) => Number(cb.dataset.tabId));
       if (tabIds.length > 0) {
-        await browser.tabs.remove(tabIds);
-        statusEl.textContent = `Closed ${tabIds.length} tab(s). Stay focused!`;
+        // Group the distracting tabs into a collapsed group
+        const groupId = await chrome.tabs.group({ tabIds });
+        await chrome.tabGroups.update(groupId, {
+          title: 'Distractions',
+          color: 'grey',
+          collapsed: true,
+        });
+        statusEl.textContent = `Grouped ${tabIds.length} tab(s) into "Distractions" (collapsed). Expand the group to get them back.`;
         resultsEl.innerHTML = '';
       }
     });
   } catch (err) {
     statusEl.textContent = `Error: ${err instanceof Error ? err.message : String(err)}`;
+    console.error('Focus mode error:', err);
   }
 
   focusBtn.disabled = false;
-  focusBtn.textContent = 'Activate Focus Mode';
+  focusBtn.textContent = 'Hide Distracting Tabs';
 });
 
 function escapeHtml(str: string): string {
