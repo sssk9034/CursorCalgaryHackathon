@@ -1,21 +1,62 @@
 import './style.css';
 
 const FOCUS_URL = 'http://127.0.0.1:3456/focus';
+const GROUP_TITLE = 'Distractions';
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div class="container">
     <h1>Tab Focus</h1>
     <p class="subtitle">Hide distracting tabs so you can focus</p>
-    <button id="focus-btn" type="button">Hide Distracting Tabs</button>
+    <div class="button-row">
+      <button id="focus-btn" type="button">Hide Distracting Tabs</button>
+      <button id="restore-btn" type="button" class="restore-btn">Restore Tabs</button>
+    </div>
     <div id="status" class="status"></div>
     <div id="results" class="results"></div>
   </div>
 `;
 
 const focusBtn = document.querySelector<HTMLButtonElement>('#focus-btn')!;
+const restoreBtn = document.querySelector<HTMLButtonElement>('#restore-btn')!;
 const statusEl = document.querySelector<HTMLDivElement>('#status')!;
 const resultsEl = document.querySelector<HTMLDivElement>('#results')!;
 
+// Check if there's a Distractions group on load
+checkForDistractionGroup();
+
+async function checkForDistractionGroup() {
+  const groups = await chrome.tabGroups.query({ title: GROUP_TITLE });
+  if (groups.length > 0) {
+    const tabs = await browser.tabs.query({ groupId: groups[0].id });
+    restoreBtn.style.display = 'inline-block';
+    restoreBtn.textContent = `Restore Tabs (${tabs.length})`;
+  } else {
+    restoreBtn.style.display = 'none';
+  }
+}
+
+// Restore hidden tabs
+restoreBtn.addEventListener('click', async () => {
+  const groups = await chrome.tabGroups.query({ title: GROUP_TITLE });
+  if (groups.length === 0) {
+    statusEl.textContent = 'No hidden tabs to restore.';
+    return;
+  }
+
+  const tabs = await browser.tabs.query({ groupId: groups[0].id });
+  const tabIds = tabs.map((t) => t.id!).filter(Boolean);
+
+  // Ungroup all tabs in the Distractions group
+  for (const tabId of tabIds) {
+    await chrome.tabs.ungroup(tabId);
+  }
+
+  statusEl.textContent = `Restored ${tabIds.length} tab(s).`;
+  resultsEl.innerHTML = '';
+  await checkForDistractionGroup();
+});
+
+// Hide distracting tabs
 focusBtn.addEventListener('click', async () => {
   focusBtn.disabled = true;
   focusBtn.textContent = 'Analyzing...';
@@ -76,15 +117,15 @@ focusBtn.addEventListener('click', async () => {
       const checkboxes = resultsEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
       const tabIds = Array.from(checkboxes).map((cb) => Number(cb.dataset.tabId));
       if (tabIds.length > 0) {
-        // Group the distracting tabs into a collapsed group
         const groupId = await chrome.tabs.group({ tabIds });
         await chrome.tabGroups.update(groupId, {
-          title: 'Distractions',
+          title: GROUP_TITLE,
           color: 'grey',
           collapsed: true,
         });
-        statusEl.textContent = `Grouped ${tabIds.length} tab(s) into "Distractions" (collapsed). Expand the group to get them back.`;
+        statusEl.textContent = `Hidden ${tabIds.length} tab(s) into "${GROUP_TITLE}" group.`;
         resultsEl.innerHTML = '';
+        await checkForDistractionGroup();
       }
     });
   } catch (err) {

@@ -55,6 +55,24 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.button-row {
+  display: flex;
+  gap: 8px;
+}
+
+.button-row button {
+  flex: 1;
+}
+
+.restore-btn {
+  background-color: #444;
+  display: none;
+}
+
+.restore-btn:hover {
+  background-color: #555;
+}
+
 .hide-btn {
   background-color: #e54545;
   margin-top: 8px;
