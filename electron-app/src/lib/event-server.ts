@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { insertTabEvent } from './db';
 import { ThrashDetector } from './thrash-detector';
+import { getFocusSuggestions } from './focus-advisor';
 
 const PORT = 3456;
 
@@ -38,6 +39,33 @@ export function startEventServer() {
           console.error('Failed to parse event:', err);
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        }
+      });
+      return;
+    }
+
+    // POST /focus — receives all current tabs, asks Gemini which to close
+    if (req.method === 'POST' && req.url === '/focus') {
+      let body = '';
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', async () => {
+        try {
+          const { tabs } = JSON.parse(body);
+          const apiKey = process.env.OPENROUTER_API_KEY;
+          if (!apiKey) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'OPENROUTER_API_KEY not set' }));
+            return;
+          }
+          console.log(`Focus mode requested with ${tabs.length} tabs`);
+          const suggestion = await getFocusSuggestions(tabs, apiKey);
+          console.log('Focus suggestion:', JSON.stringify(suggestion));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(suggestion));
+        } catch (err) {
+          console.error('Focus advisor error:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
         }
       });
       return;

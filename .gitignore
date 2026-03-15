@@ -2,3 +2,5 @@ node_modules/
 dist/
 .claude/
 .vscode/
+.env
+.DS_Store
