@@ -1,2 +1,9 @@
-// See the Electron documentation for details on how to use preload scripts:
-// https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('electronAPI', {
+  login: () => ipcRenderer.invoke('login'),
+  onAuthSuccess: (callback: (data: any) => void) =>
+    ipcRenderer.on('auth-success', (_event, data) => callback(data)),
+  onUserProfile: (callback: (profile: any) => void) =>
+    ipcRenderer.on('user-profile', (_event, profile) => callback(profile)),
+});
