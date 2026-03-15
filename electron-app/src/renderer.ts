@@ -497,9 +497,44 @@ if (page === 'break') {
     const btnGroup = document.createElement('div');
     btnGroup.className = 'break-btn-group';
 
-    const startBtn = makeOutlineBtn('Start', textColor, () => {
-      window.breakApp.invokeBreakStart(windowId);
-    });
+    let startBreakRequested = false;
+    const startBreak = () => {
+      if (startBreakRequested) return;
+      startBreakRequested = true;
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      card.style.transformOrigin = "center center";
+      const cardWidth = card.offsetWidth;
+      const cardHeight = card.offsetHeight;
+      const size = Math.min(cardWidth, cardHeight);
+      const circleX = centerX - size / 2;
+      const circleY = centerY - size / 2;
+      // Phase 1: collapse card into a perfect circle at center (square + scale + round + move to center)
+      animate(content, { opacity: [1, 0] }, {
+        duration: 0.2,
+        ease: "easeOut",
+      });
+      animate(
+        card,
+        {
+          x: [0, circleX],
+          y: [0, circleY],
+          width: [cardWidth, size],
+          height: [cardHeight, size],
+          scale: [1, 0.24],
+          borderRadius: ["12px", "50%"],
+        },
+        {
+          duration: 0.35,
+          ease: [0.25, 0.46, 0.45, 0.94],
+        },
+      ).then(() => {
+        // Phase 2: window moves to center of screen (circle is already centered in viewport)
+        window.breakApp.invokeBreakStart(windowId);
+      });
+    };
+
+    const startBtn = makeOutlineBtn('Start', textColor, startBreak);
 
     btnGroup.appendChild(startBtn);
 
@@ -521,8 +556,25 @@ if (page === 'break') {
     card.appendChild(content);
     document.body.appendChild(card);
 
-    animate(card, { opacity: [0, 1], scale: [0.9, 1], y: [10, 0] }, {
+    // Expanding circle reveal + slide down
+    content.style.opacity = "0";
+    card.style.clipPath = "circle(0% at 50% 50%)";
+
+    animate(card, { y: [-120, 0] }, {
+      duration: 0.4,
+      ease: "easeOut",
+    });
+
+    animate(card, {
+      clipPath: ["circle(0% at 50% 50%)", "circle(150% at 50% 50%)"],
+    }, {
+      duration: 1.4,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    });
+
+    animate(content, { opacity: [0, 1] }, {
       duration: 0.3,
+      delay: 1.4,
       ease: "easeOut",
     });
 
@@ -558,7 +610,7 @@ if (page === 'break') {
         fill.style.width = `${pct}%`;
 
         if (remaining <= 0) {
-          window.breakApp.invokeBreakStart(windowId);
+          startBreak();
           return; // stop ticking
         }
       }
@@ -692,14 +744,34 @@ if (page === 'break') {
     document.body.appendChild(backdrop);
     document.body.appendChild(card);
 
+    // Fade in card content as it expands (avoids squished text during scale)
+    const cardContent = [header, msgEl, progressWrap, footer];
+    cardContent.forEach((el) => ((el as HTMLElement).style.opacity = "0"));
+
     animate(backdrop, { opacity: [0, 1] }, {
-      duration: 0.3,
+      duration: 0.35,
       ease: "easeOut",
     });
 
-    animate(card, { opacity: [0, 1], y: [-20, 0] }, {
-      duration: 0.5,
-      ease: [0.25, 0.46, 0.45, 0.94],
+    // Expanding circle reveal: clip from center so the card is revealed as the circle grows
+    card.style.clipPath = "circle(0% at 50% 50%)";
+    card.style.transformOrigin = "center center";
+    animate(
+      card,
+      {
+        clipPath: ["circle(0% at 50% 50%)", "circle(150% at 50% 50%)"],
+      },
+      {
+        duration: 1.4,
+        ease: [0.25, 0.46, 0.45, 0.94],
+      },
+    );
+    cardContent.forEach((el, i) => {
+      animate(el as HTMLElement, { opacity: [0, 1] }, {
+        duration: 0.3,
+        delay: 1.4 + i * 0.03,
+        ease: "easeOut",
+      });
     });
 
     const totalMs = breakLengthSeconds * 1000;

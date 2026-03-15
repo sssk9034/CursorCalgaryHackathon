@@ -343,6 +343,49 @@ ipcMain.handle(IpcChannel.SettingsSet, (_event, newSettings: Settings) => {
   buildTray();
 });
 
+// Match renderer card animation (0.5s) so window and card move as one
+const CENTER_ANIMATION_MS = 500;
+const CENTER_ANIMATION_FRAME_MS = 16;
+
+/** Ease-out: matches renderer cubic-bezier(0.25, 0.46, 0.45, 0.94) for unified feel */
+function easeOutCubic(t: number): number {
+  return 1 - (1 - t) ** 3;
+}
+
+function animateWindowToCenter(
+  win: BrowserWindow,
+  centerX: number,
+  centerY: number,
+  width: number,
+  height: number,
+  onComplete: () => void,
+): void {
+  const startBounds = win.getBounds();
+  const startX = startBounds.x;
+  const startY = startBounds.y;
+  const startTime = Date.now();
+
+  const tick = () => {
+    if (win.isDestroyed()) {
+      onComplete();
+      return;
+    }
+    const elapsed = Date.now() - startTime;
+    const t = Math.min(elapsed / CENTER_ANIMATION_MS, 1);
+    const eased = easeOutCubic(t);
+    const x = Math.round(startX + (centerX - startX) * eased);
+    const y = Math.round(startY + (centerY - startY) * eased);
+    win.setBounds({ x, y, width, height });
+
+    if (t >= 1) {
+      onComplete();
+      return;
+    }
+    setTimeout(tick, CENTER_ANIMATION_FRAME_MS);
+  };
+  tick();
+}
+
 ipcMain.handle(IpcChannel.BreakStart, (_event, windowId: number) => {
   if (windowId !== 0) return;
 
@@ -351,41 +394,72 @@ ipcMain.handle(IpcChannel.BreakStart, (_event, windowId: number) => {
   const breakEndTime = breakStartTime + settings.breakLengthSeconds * 1000;
 
   const displays = screen.getAllDisplays();
-  breakWindows.forEach((win, i) => {
+
+  // Animate each break window to the center of its display
+  const targets: { win: BrowserWindow; centerX: number; centerY: number; width: number; height: number }[] = [];
+  breakWindows.forEach((win) => {
     if (win.isDestroyed()) return;
-    const display = displays[i] ?? displays[0];
-    const showBackdrop = settings.showBackdrop && settings.backdropOpacity > 0;
-    if (showBackdrop) {
-      win.setFocusable(true);
-      win.setBounds({
-        x: display.bounds.x,
-        y: display.bounds.y,
-        width: display.bounds.width,
-        height: display.bounds.height,
-      });
-    } else {
-      win.setFocusable(true);
-      win.setBounds({
-        x: Math.round(display.bounds.x + display.bounds.width / 2 - 250),
-        y: Math.round(display.bounds.y + display.bounds.height / 2 - 150),
-        width: 500,
-        height: 300,
-      });
-    }
+    const bounds = win.getBounds();
+    const display = screen.getDisplayMatching(bounds);
+    const area = display.workArea;
+    const centerX = Math.round(area.x + area.width / 2 - bounds.width / 2);
+    const centerY = Math.round(area.y + area.height / 2 - bounds.height / 2);
+    targets.push({
+      win,
+      centerX,
+      centerY,
+      width: bounds.width,
+      height: bounds.height,
+    });
   });
 
-  const allowPostpone =
-    settings.postponeBreakEnabled &&
-    (settings.postponeLimit === 0 || postponeCount < settings.postponeLimit);
+  if (targets.length === 0) return;
 
-  const payload: BreakBeginPayload = {
-    breakEndTime,
-    breakStartTime,
-    settings,
-    postponeCount,
-    allowPostpone,
+  let completed = 0;
+  const maybeFinish = () => {
+    completed += 1;
+    if (completed < targets.length) return;
+
+    const allowPostpone =
+      settings.postponeBreakEnabled &&
+      (settings.postponeLimit === 0 || postponeCount < settings.postponeLimit);
+
+    const payload: BreakBeginPayload = {
+      breakEndTime,
+      breakStartTime,
+      settings,
+      postponeCount,
+      allowPostpone,
+    };
+
+    breakWindows.forEach((win, i) => {
+      if (win.isDestroyed()) return;
+      const display = displays[i] ?? displays[0];
+      const showBackdrop = settings.showBackdrop && settings.backdropOpacity > 0;
+      win.setFocusable(true);
+      if (showBackdrop) {
+        win.setBounds({
+          x: display.bounds.x,
+          y: display.bounds.y,
+          width: display.bounds.width,
+          height: display.bounds.height,
+        });
+      } else {
+        win.setBounds({
+          x: Math.round(display.bounds.x + display.bounds.width / 2 - 250),
+          y: Math.round(display.bounds.y + display.bounds.height / 2 - 150),
+          width: 500,
+          height: 300,
+        });
+      }
+    });
+
+    sendToBreakWindows(IpcChannel.BreakBegin, payload);
   };
-  sendToBreakWindows(IpcChannel.BreakBegin, payload);
+
+  targets.forEach(({ win, centerX, centerY, width, height }) => {
+    animateWindowToCenter(win, centerX, centerY, width, height, maybeFinish);
+  });
 });
 
 ipcMain.handle(IpcChannel.BreakEnd, (_event, bStartTime: number) => {
@@ -409,8 +483,12 @@ ipcMain.handle(IpcChannel.BreakPostpone, () => {
 
 // ── Tray ──────────────────────────────────────────────────────────────────────
 
-const TRAY_ICON_DATA =
-  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHklEQVQ4T2NkYGD4z0ABYBw1gGE0EhiGAQwMDAwAARgAAT4GAdyAAAAASUVORK5CYII=";
+function getTrayIconPath(): string {
+  const baseDir = app.isPackaged
+    ? process.resourcesPath
+    : app.getAppPath();
+  return path.join(baseDir, "image.png");
+}
 
 function buildTray() {
   if (!tray) return;
@@ -524,11 +602,22 @@ function buildTray() {
   updateTrayTooltip();
 }
 
+const TRAY_ICON_FALLBACK =
+  "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAHklEQVQ4T2NkYGD4z0ABYBw1gGE0EhiGAQwMDAwAARgAAT4GAdyAAAAASUVORK5CYII=";
+
+/** Menubar/tray icon size; 22px fits macOS/Linux, scales on Windows */
+const TRAY_ICON_SIZE = 22;
+
 function initTray() {
-  const icon = nativeImage.createFromDataURL(
-    `data:image/png;base64,${TRAY_ICON_DATA}`,
-  );
-  tray = new Tray(icon);
+  const iconPath = getTrayIconPath();
+  let icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    icon = nativeImage.createFromDataURL(
+      `data:image/png;base64,${TRAY_ICON_FALLBACK}`,
+    );
+  }
+  const resized = icon.resize({ width: TRAY_ICON_SIZE, height: TRAY_ICON_SIZE });
+  tray = new Tray(resized.isEmpty() ? icon : resized);
 
   if (process.platform === "win32") {
     tray.on("click", () => tray?.popUpContextMenu());
