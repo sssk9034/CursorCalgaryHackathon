@@ -574,7 +574,7 @@ if (page === 'break') {
 
     animate(content, { opacity: [0, 1] }, {
       duration: 0.3,
-      delay: 1.4,
+      delay: 0.7,
       ease: "easeOut",
     });
 
@@ -769,7 +769,7 @@ if (page === 'break') {
     cardContent.forEach((el, i) => {
       animate(el as HTMLElement, { opacity: [0, 1] }, {
         duration: 0.3,
-        delay: 1.4 + i * 0.03,
+        delay: 0.7 + i * 0.03,
         ease: "easeOut",
       });
     });
