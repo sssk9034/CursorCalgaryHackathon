@@ -4,13 +4,20 @@ import { ThrashDetector } from './thrash-detector';
 
 const PORT = 3456;
 
-export function startEventServer() {
+export interface EventServerOptions {
+  /** Called when thrash is detected (e.g. start a break like the tray action) */
+  onThrash?: () => void;
+}
+
+export function startEventServer(options: EventServerOptions = {}) {
+  const { onThrash } = options;
   const detector = new ThrashDetector();
 
   detector.on('thrash', (alert) => {
-    // TODO: send notification to renderer, trigger UI alert, etc.
     console.log('Thrash alert emitted:', alert);
+    onThrash?.();
   });
+
   const server = http.createServer((req, res) => {
     // CORS headers for browser extension
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -46,6 +53,13 @@ export function startEventServer() {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok' }));
+      return;
+    }
+
+    if (req.method === 'POST' && req.url === '/start-break') {
+      onThrash?.();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
       return;
     }
 

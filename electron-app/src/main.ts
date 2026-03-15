@@ -632,7 +632,7 @@ function initTray() {
 
 app.on("ready", () => {
   initDb();
-  startEventServer();
+  startEventServer({ onThrash: () => doBreak() });
 
   const settings = getSettings();
   breakTime = Date.now() + settings.breakFrequencySeconds * 1000;
