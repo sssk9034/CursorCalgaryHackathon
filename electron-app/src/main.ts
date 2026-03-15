@@ -1,5 +1,9 @@
+import dotenv from 'dotenv';
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
+
+// Load .env from repo root (two levels up from electron-app/)
+dotenv.config({ path: path.resolve(app.getAppPath(), '..', '.env') });
 import started from 'electron-squirrel-startup';
 import { initDb } from './lib/db';
 import { startEventServer } from './lib/event-server';

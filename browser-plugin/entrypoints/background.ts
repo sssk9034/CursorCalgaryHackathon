@@ -32,11 +32,16 @@ export default defineBackground(() => {
       browser.tabs.query({}),
     ]);
 
+    // Exclude tabs in the "Distractions" group from the count
+    const distractionGroups = await chrome.tabGroups.query({ title: "Distractions" });
+    const distractionGroupIds = new Set(distractionGroups.map((g) => g.id));
+    const activeTabs = allTabs.filter((t) => !distractionGroupIds.has(t.groupId));
+
     const entry: TabSwitchEvent = {
       url: tab.url,
       name: tab.title,
       time_utc: new Date().toISOString(),
-      tabCount: allTabs.length,
+      tabCount: activeTabs.length,
     };
 
     // Store locally as backup
