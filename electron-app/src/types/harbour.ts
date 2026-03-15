@@ -27,8 +27,11 @@ export interface HarbourTask {
   id: string;
   project: string;
   issueTitle: string;
+  issueUrl?: string;
   status: 'Todo' | 'In Progress' | 'Blocked' | 'Review';
+  sourceStatusLabel?: string;
   priority: 'P0' | 'P1' | 'P2' | 'P3';
+  sourcePriorityLabel?: string;
   dueDate: string;
   assignee: string;
   cycleHint: string;

@@ -8,6 +8,7 @@ import {
   Notification,
   powerMonitor,
   screen,
+  shell,
   Tray,
 } from "electron";
 import path from "node:path";
@@ -192,6 +193,18 @@ function createMainWindow() {
 
   return mainWindow;
 }
+
+ipcMain.handle("harbour:open-issue", async (_event, issueUrl: string) => {
+  if (
+    typeof issueUrl !== "string" ||
+    !issueUrl.startsWith("https://linear.app/")
+  ) {
+    throw new Error("Invalid Linear issue URL.");
+  }
+
+  const desktopUrl = issueUrl.replace(/^https:\/\//, "linear://");
+  await shell.openExternal(desktopUrl);
+});
 
 ipcMain.handle("harbour:get-sources", async () => {
   return getSourceSnapshot();

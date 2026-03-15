@@ -52,4 +52,6 @@ contextBridge.exposeInMainWorld("breakApp", {
 contextBridge.exposeInMainWorld("harbourDesktop", {
   getSources: (): Promise<SourceSnapshot> =>
     ipcRenderer.invoke("harbour:get-sources"),
+  openIssue: (url: string): Promise<void> =>
+    ipcRenderer.invoke("harbour:open-issue", url),
 });

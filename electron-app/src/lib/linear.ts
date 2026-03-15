@@ -14,6 +14,7 @@ interface LinearIssue {
   identifier: string;
   title: string;
   priority: number | null;
+  priorityLabel?: string | null;
   dueDate: string | null;
   updatedAt: string;
   url?: string | null;
@@ -75,6 +76,7 @@ const LINEAR_QUERY = `
             identifier
             title
             priority
+            priorityLabel
             dueDate
             updatedAt
             url
@@ -105,6 +107,7 @@ const LINEAR_QUERY = `
         identifier
         title
         priority
+        priorityLabel
         dueDate
         updatedAt
         url
@@ -143,8 +146,24 @@ function mapPriority(priority: number | null): HarbourTask['priority'] {
   return 'P3';
 }
 
-function mapStatus(stateName: string | null | undefined): HarbourTask['status'] {
+function mapStatus(
+  stateName: string | null | undefined,
+  stateType: string | null | undefined,
+): HarbourTask['status'] {
+  const type = (stateType || '').toLowerCase();
   const value = (stateName || '').toLowerCase();
+
+  if (type === 'started') {
+    return 'In Progress';
+  }
+
+  if (type === 'completed') {
+    return 'Review';
+  }
+
+  if (type === 'canceled') {
+    return 'Blocked';
+  }
 
   if (value.includes('block')) return 'Blocked';
   if (value.includes('progress') || value.includes('started')) return 'In Progress';
@@ -171,7 +190,7 @@ function deriveTaskHeuristics(issue: LinearIssue, index: number, total: number):
   const priorityValue = issue.priority ?? 4;
   const dueInDays = daysUntil(issue.dueDate);
   const title = issue.title.toLowerCase();
-  const status = mapStatus(issue.state?.name);
+  const status = mapStatus(issue.state?.name, issue.state?.type);
   const isCommunication = /reply|comment|follow up|follow-up|update|message/.test(title);
   const isFix = /fix|patch|bug|error|callback|crash/.test(title);
   const isStrategic = /adr|architecture|design|strategy|plan|roadmap|migration/.test(title);
@@ -202,8 +221,11 @@ function deriveTaskHeuristics(issue: LinearIssue, index: number, total: number):
     id: issue.identifier,
     project: issue.project?.name || issue.team?.name || 'Linear',
     issueTitle: issue.title,
+    issueUrl: issue.url || undefined,
     status,
+    sourceStatusLabel: issue.state?.name || status,
     priority: mapPriority(issue.priority),
+    sourcePriorityLabel: issue.priorityLabel || undefined,
     dueDate: issue.dueDate || isoDateOffset(index + 1),
     assignee: issue.assignee?.name || 'Unassigned',
     cycleHint: issue.cycle?.name || issue.team?.key || 'Linear',
@@ -295,6 +317,7 @@ export async function getSourceSnapshot(): Promise<SourceSnapshot> {
 
     if (!issues.length) {
       return {
+        tasks: [],
         sources: buildSources(
           'hybrid',
           'Linear connected, no issues found',

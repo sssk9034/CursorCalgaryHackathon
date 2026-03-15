@@ -16,6 +16,7 @@ declare global {
     };
     harbourDesktop?: {
       getSources: () => Promise<SourceSnapshot>;
+      openIssue: (url: string) => Promise<void>;
     };
   }
 }

@@ -34,7 +34,7 @@ interface HarbourStoreState {
   needsReplan: boolean;
   wizard: WizardState;
   replanDiff: ReplanDiff | null;
-  syncStatus: string;
+  lastTaskSyncAt: number;
   sources: SourceDescriptor[];
 }
 
@@ -69,13 +69,22 @@ const initialPlan = buildPlan({
   recommendation: initialRecommendation,
 });
 
-function formatSyncStatus(tasks: HarbourStoreState['tasks']): string {
-  const latest = tasks
-    .map((task) => new Date(task.syncedAt).getTime())
-    .reduce((max, value) => Math.max(max, value), 0);
-
-  const deltaMinutes = Math.max(1, Math.round((Date.now() - latest) / (1000 * 60)));
-  return `Synced ${deltaMinutes}m ago`;
+function buildTaskSignature(tasks: HarbourStoreState['tasks']): string {
+  return JSON.stringify(
+    tasks.map((task) => ({
+      id: task.id,
+      issueTitle: task.issueTitle,
+      issueUrl: task.issueUrl,
+      status: task.status,
+      sourceStatusLabel: task.sourceStatusLabel,
+      priority: task.priority,
+      sourcePriorityLabel: task.sourcePriorityLabel,
+      dueDate: task.dueDate,
+      assignee: task.assignee,
+      cycleHint: task.cycleHint,
+      syncedAt: task.syncedAt,
+    })),
+  );
 }
 
 function recomputePending(
@@ -114,7 +123,7 @@ export const useHarbourStore = create<HarbourStore>((set, get) => ({
     step: 0,
   },
   replanDiff: null,
-  syncStatus: formatSyncStatus(scenario.tasks),
+  lastTaskSyncAt: Date.now(),
   sources: defaultSources,
 
   openWizard: (mode) => {
@@ -299,7 +308,10 @@ export const useHarbourStore = create<HarbourStore>((set, get) => ({
     }
 
     set((state) => {
-      const tasks = snapshot.tasks?.length ? snapshot.tasks : state.tasks;
+      const tasks = snapshot.tasks !== undefined ? snapshot.tasks : state.tasks;
+      const tasksChanged =
+        snapshot.tasks !== undefined &&
+        buildTaskSignature(tasks) !== buildTaskSignature(state.tasks);
       const recommendation = generateRecommendation({
         tasks,
         emails: state.emails,
@@ -317,7 +329,7 @@ export const useHarbourStore = create<HarbourStore>((set, get) => ({
           recommendation,
         }),
         pendingRecommendation: null,
-        syncStatus: formatSyncStatus(tasks),
+        lastTaskSyncAt: tasksChanged ? Date.now() : state.lastTaskSyncAt,
         sources: snapshot.sources,
       };
     });
